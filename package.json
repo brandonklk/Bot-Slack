@@ -1,0 +1,19 @@
+{
+  "name": "bot-slack",
+  "version": "1.0.0",
+  "description": "botslack faculdade",
+  "main": "src",
+  "scripts": {
+    "start": "nodemon node .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/rtm-api": "^5.0.5",
+    "@slack/web-api": "^5.12.0",
+    "dotenv": "^8.2.0",
+    "esm": "^3.2.25",
+    "nodemon": "^2.0.5"
+  }
+}
