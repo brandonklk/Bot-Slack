@@ -10,6 +10,28 @@ const packageJson = require('../package.json');
 const rtm = new RTMClient(SLACK_OAUTH_TOKEN);
 const web = new WebClient(SLACK_OAUTH_TOKEN);
 
+const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+const TOKEN_PATH = 'token.json';
+let EVENTS_OF_CALENDAR = []
+
+// {
+//   kind: 'calendar#event',
+//   etag: '"3206814414336000"',
+//   id: '17cpmtntbeugg9pcji3lmdn61h',
+//   status: 'confirmed',
+//   htmlLink: 'https://www.google.com/calendar/event?eid=MTdjcG10bnRiZXVnZzlwY2ppM2xtZG42MWggZGF5YW4uZnJlaXRhc0BjYXRvbGljYXNjLm9yZy5icg',
+//   created: '2020-10-22T22:53:27.000Z',
+//   updated: '2020-10-22T22:53:27.168Z',
+//   summary: 'Teste',
+//   creator: { email: 'dayan.freitas@catolicasc.org.br', self: true },
+//   organizer: { email: 'dayan.freitas@catolicasc.org.br', self: true },
+//   start: { dateTime: '2020-10-22T19:30:00-03:00' },
+//   end: { dateTime: '2020-10-22T20:30:00-03:00' },
+//   iCalUID: '17cpmtntbeugg9pcji3lmdn61h@google.com',
+//   sequence: 0,
+//   reminders: { useDefault: true }
+// }
+
 rtm.start()
   .catch(console.error);
 
@@ -19,12 +41,58 @@ rtm.on('ready', async () => {
 })
 
 rtm.on('slack_event', async (eventType, event) => {
-    if (event && event.type === 'message'){
-        if (event.text === '!hello') {
-            hello(event.channel, event.user)
-        }
-    }
+  if (event && event.type === 'message'){
+    const {channel ,text, user} = event;
+
+    if (text.trim().includes('!list')) {
+      // sendMessage(channel, `Olá <@${user}>`)
+      const listOfEventsCalendar = await getEventOfGoogleCalendar()
+
+      listOfEventsCalendar.forEach(evento => {
+        const string_event = `${evento.data} [${evento.startTime}-${evento.endTime}] - ${evento.description}`
+        sendMessage(channel, string_event)
+      });
+    }      
+
+  }
 })
+
+
+async function getEventOfGoogleCalendar () {
+  const formatDate = (date) => {
+    const d = date.getDate() < 10 ? `0${date.getDate()*1}`: date.getDate()*1
+    const m = date.getMonth()+1 < 10 ? `0${date.getMonth()+1}`: date.getMonth()+1
+    const y = date.getFullYear()
+    
+    return `${d}/${m}/${y}`
+  }
+
+  const formatHour = (date) => {
+    const re = /\d\d:\d\d/gmi
+    const hour = date.match(re)[0]
+
+    return hour
+  }
+
+
+  return new Promise((resolve, reject) => {
+    const listOfEventsCalendar = EVENTS_OF_CALENDAR.map(e => {
+      
+      const data = formatDate(new Date(e.start.dateTime))
+      const startTime = formatHour(e.start.dateTime)
+      const endTime = formatHour(e.end.dateTime)
+
+      return {
+        startTime,
+        endTime,
+        data,
+        description: e.summary
+      }
+    })
+
+    resolve(listOfEventsCalendar)
+  })
+}
 
 async function sendMessage(channel, message) {
   console.log(message)
@@ -34,8 +102,6 @@ async function sendMessage(channel, message) {
     })
 }
 
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
-const TOKEN_PATH = 'token.json';
 
 fs.readFile('credentials.json', (err, content) => {
   if (err) return console.log('Error loading client secret file:', err);
@@ -101,6 +167,8 @@ function listEvents(auth) {
   }, (err, res) => {
     if (err) return console.log('The API returned an error: ' + err);
     const events = res.data.items;
+    EVENTS_OF_CALENDAR = events
+
     if (events.length) {
       console.log('Upcoming 10 events:');
       events.map((event, i) => {
