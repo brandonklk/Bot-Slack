@@ -1,11 +1,11 @@
 import { RTMClient }  from '@slack/rtm-api'
 import { SLACK_OAUTH_TOKEN, BOT_SPAM_CHANNEL } from './constants'
 import  { WebClient } from '@slack/web-api';
+import { getEventOfGoogleCalendar } from './formatUtils';
 
 const fs = require('fs');
 const readline = require('readline');
 const { google } = require('googleapis');
-const packageJson = require('../package.json');
 
 const rtm = new RTMClient(SLACK_OAUTH_TOKEN);
 const web = new WebClient(SLACK_OAUTH_TOKEN);
@@ -13,6 +13,7 @@ const web = new WebClient(SLACK_OAUTH_TOKEN);
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 const TOKEN_PATH = 'token.json';
 let EVENTS_OF_CALENDAR = []
+const EVENTS_NOT_FOUND = "Nenhum evento encontrado."
 
 // {
 //   kind: 'calendar#event',
@@ -45,54 +46,34 @@ rtm.on('slack_event', async (eventType, event) => {
     const {channel ,text, user} = event;
 
     if (text.trim().includes('!list')) {
-      // sendMessage(channel, `Olá <@${user}>`)
-      const listOfEventsCalendar = await getEventOfGoogleCalendar()
+      const listOfEventsCalendar = await getEventOfGoogleCalendar(EVENTS_OF_CALENDAR)
 
-      listOfEventsCalendar.forEach(evento => {
-        const string_event = `${evento.data} [${evento.startTime}-${evento.endTime}] - ${evento.description}`
-        sendMessage(channel, string_event)
-      });
-    }      
+      if(listOfEventsCalendar.length <= 0) {
+        sendMessage(channel, EVENTS_NOT_FOUND)
+      } else {
+        listOfEventsCalendar.forEach(evento => {
+          const string_event = `${evento.data} [${evento.startTime}-${evento.endTime}] - ${evento.description}`
+          sendMessage(channel, string_event)  
+        });
+      }
+    }
 
+    if(text.trim().includes('!a-list')) {
+      const listOfEventsCalendarOfBirthday = await getEventOfGoogleCalendar(EVENTS_OF_CALENDAR);
+
+      if(listOfEventsCalendarOfBirthday.length <= 0) {
+        sendMessage(channel, EVENTS_NOT_FOUND)
+      } else {
+        listOfEventsCalendarOfBirthday.forEach(events => {
+          if(events.location != undefined) {
+            const eventInBirthday = `Olá <@${user}>, aniversário dia ${events.data} [${events.startTime}-${events.endTime}] - ${events.description} - ${events.location}`
+            sendMessage(channel, eventInBirthday)  
+          }
+        });
+      }
+    }
   }
 })
-
-
-async function getEventOfGoogleCalendar () {
-  const formatDate = (date) => {
-    const d = date.getDate() < 10 ? `0${date.getDate()*1}`: date.getDate()*1
-    const m = date.getMonth()+1 < 10 ? `0${date.getMonth()+1}`: date.getMonth()+1
-    const y = date.getFullYear()
-    
-    return `${d}/${m}/${y}`
-  }
-
-  const formatHour = (date) => {
-    const re = /\d\d:\d\d/gmi
-    const hour = date.match(re)[0]
-
-    return hour
-  }
-
-
-  return new Promise((resolve, reject) => {
-    const listOfEventsCalendar = EVENTS_OF_CALENDAR.map(e => {
-      
-      const data = formatDate(new Date(e.start.dateTime))
-      const startTime = formatHour(e.start.dateTime)
-      const endTime = formatHour(e.end.dateTime)
-
-      return {
-        startTime,
-        endTime,
-        data,
-        description: e.summary
-      }
-    })
-
-    resolve(listOfEventsCalendar)
-  })
-}
 
 async function sendMessage(channel, message) {
   console.log(message)
@@ -144,18 +125,6 @@ function getAccessToken(oAuth2Client, callback) {
   });
 }
 
-function teste(start, event) {
-  console.log(event)
-    return `${start} - ${event}`;
-}
-
-function hello (channelId, userId) {
-  const { start, event } = teste();
-
-  console.log(start, event)
-  sendMessage(channelId, `${start} - ${event}`)
-}
-
 function listEvents(auth) {
   const calendar = google.calendar({version: 'v3', auth});
   calendar.events.list({
@@ -174,7 +143,6 @@ function listEvents(auth) {
       events.map((event, i) => {
         var start = event.start.dateTime || event.start.date;
         console.log(`${start} - ${event.summary}`);
-        teste(start, event)
       });
     } else {
       console.log('No upcoming events found.');
